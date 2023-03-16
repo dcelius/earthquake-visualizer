@@ -129,6 +129,6 @@ export class EarthquakeApp extends gfx.GfxApp
         this.earth.update(deltaTime);
 
         // Animate the earthquakes and remove old ones
-        this.earth.animateEarthquakes(this.currentTime, deltaTime);
+        this.earth.animateEarthquakes(this.currentTime);
     }
 }
