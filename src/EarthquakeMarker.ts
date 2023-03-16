@@ -5,6 +5,7 @@
  */ 
 
 import * as gfx from 'gophergfx'
+import { Vector3 } from 'gophergfx';
 import { EarthquakeRecord } from './EarthquakeRecord';
 
 export class EarthquakeMarker extends gfx.MeshInstance
@@ -53,5 +54,15 @@ export class EarthquakeMarker extends gfx.MeshInstance
     getPlaybackLife(currentTime: number) : number
     {
         return gfx.MathUtils.clamp(Math.abs(currentTime/1000 - this.startTime/1000) / this.duration, 0, 1);
+    }
+
+    positionFromAngle(degree: number) {
+        const rad = Math.PI / 180;
+        let tempLong = this.longitude + degree;
+        if (tempLong > 180) tempLong -= 2 * 180; 
+        const x = Math.cos(this.latitude * rad) * Math.sin(tempLong * rad);
+        const y = Math.sin(this.latitude * rad);
+        const z = Math.cos(this.latitude * rad) * Math.cos(tempLong * rad); 
+        return new Vector3(x,y,z);
     }
 }

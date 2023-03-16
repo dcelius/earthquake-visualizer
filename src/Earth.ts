@@ -21,6 +21,8 @@ export class Earth extends gfx.Transform3
 
     public axis: Quaternion;
 
+    public degRot : number;
+
     constructor()
     {
         // Call the superclass constructor
@@ -35,6 +37,9 @@ export class Earth extends gfx.Transform3
         this.paused = false;
 
         this.axis = new Quaternion(0, 0.25, -0.25, 1);
+        this.axis.normalize();
+
+        this.degRot = 0;
     }
 
     public createMesh() : void
@@ -121,14 +126,22 @@ export class Earth extends gfx.Transform3
         // You should use this boolean to control the morphing
         // of the earth mesh, as described in the readme.
         if (this.globeMode){
-            if (this.earthMesh.morphAlpha <= 0) this.elapsed_time = 0;
+            if (this.earthMesh.morphAlpha <= 0) {
+                this.elapsed_time = 0;
+                this.degRot = 0
+            }
             if (this.earthMesh.morphAlpha < 1) {
                 this.elapsed_time += deltaTime;
                 this.earthMesh.morphAlpha = gfx.MathUtils.lerp(0, 1, this.elapsed_time);
                 const newRotVec = gfx.Quaternion.slerp(Quaternion.IDENTITY, this.axis, this.elapsed_time);
                 this.earthMesh.rotation = newRotVec;
             }
-            else this.earthMesh.rotateY(deltaTime / 4);
+            else 
+            {   
+                this.degRot = (this.degRot + (deltaTime * 180 / Math.PI) / 4) % 360;
+                console.log(this.degRot);
+                this.earthMesh.rotateY(deltaTime / 4);
+            }
         }
         else {
             if (this.earthMesh.morphAlpha >= 1) this.elapsed_time = 0;
@@ -167,10 +180,8 @@ export class Earth extends gfx.Transform3
         this.add(earthquake);
     }
 
-    public animateEarthquakes(currentTime : number, deltatime : number)
+    public animateEarthquakes(currentTime : number)
     {
-        const rotQ = new Quaternion(0, 0.25, -0.25, 1);
-        rotQ.normalize();
         // This code removes earthquake markers after their life has expired
         this.children.forEach((quake: gfx.Transform3) => {
             if(quake instanceof EarthquakeMarker)
@@ -190,21 +201,18 @@ export class Earth extends gfx.Transform3
                     // for each earthquake marker in part 5, then you can simply lerp
                     // between them using the same alpha as the earth mesh
                     if (this.globeMode) {
-                        if (this.earthMesh.morphAlpha < 1) quake.position = gfx.Vector3.lerp(quake.mapPosition, quake.globePosition, this.earthMesh.morphAlpha);
+                        if (this.earthMesh.morphAlpha < 1) 
+                        {
+                            quake.position = gfx.Vector3.lerp(quake.mapPosition, quake.globePosition, this.earthMesh.morphAlpha);
+                            quake.position.rotate(this.earthMesh.rotation);
+                        }
                         else {
-                            const rad = Math.PI / 180;
-                            const rate = deltatime * 16;
-                            quake.longitude += rate;
-                            if (quake.longitude > 180) quake.longitude -= 2 * 180; 
-                            const x = Math.cos(quake.latitude * rad) * Math.sin(quake.longitude * rad);
-                            const y = Math.sin(quake.latitude * rad);
-                            const z = Math.cos(quake.latitude * rad) * Math.cos(quake.longitude * rad); 
-                            quake.position = new Vector3(x, y, z);
-                            quake.position.rotate(rotQ);
+                            quake.position = quake.positionFromAngle(this.degRot);
+                            quake.position.rotate(this.axis);
                         }
                     }
                     else {
-                        if (this.earthMesh.morphAlpha > 0) quake.position = gfx.Vector3.lerp(quake.globePosition, quake.mapPosition, 1 - this.earthMesh.morphAlpha);
+                        quake.position = gfx.Vector3.lerp(quake.globePosition, quake.mapPosition, 1 - this.earthMesh.morphAlpha);
                     }
                     quake.scale = gfx.Vector3.lerp(quake.baseScale, gfx.Vector3.ZERO, playbackLife);
                 }
