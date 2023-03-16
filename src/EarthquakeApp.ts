@@ -23,6 +23,7 @@ export class EarthquakeApp extends gfx.GfxApp
     private viewMode : string;
     private playbackSpeed : number;
     private debugMode : boolean;
+    private pauseState : boolean;
     
     constructor()
     {
@@ -38,6 +39,7 @@ export class EarthquakeApp extends gfx.GfxApp
         this.viewMode = 'Map';
         this.playbackSpeed = 0.5;
         this.debugMode = false;
+        this.pauseState = false;
     }
 
     createScene(): void 
@@ -85,6 +87,10 @@ export class EarthquakeApp extends gfx.GfxApp
         debugController.name('Debug Mode');
         debugController.onChange((value: boolean) => { this.earth.toggleDebugMode(value) });
 
+        const pauseController = controls.add(this, 'pauseState');
+        pauseController.name('Pause');
+        pauseController.onChange((value: boolean) => { this.earth.togglePause(value) });
+
         // Make the GUI controls wider and open by default
         this.gui.width = 300;
         controls.open();
@@ -96,7 +102,7 @@ export class EarthquakeApp extends gfx.GfxApp
         const playbackScale = 30000000000;
 
         // Advance current time in milliseconds
-        this.currentTime += playbackScale * this.playbackSpeed * deltaTime;
+        if (!this.earth.paused) this.currentTime += playbackScale * this.playbackSpeed * deltaTime;
 
         // If we are beyond the max time, loop back to the beginning
         if(this.currentTime > this.earthquakeDB.getMaxTime())
@@ -123,6 +129,6 @@ export class EarthquakeApp extends gfx.GfxApp
         this.earth.update(deltaTime);
 
         // Animate the earthquakes and remove old ones
-        this.earth.animateEarthquakes(this.currentTime);
+        this.earth.animateEarthquakes(this.currentTime, deltaTime);
     }
 }

@@ -5,6 +5,7 @@
  */ 
 
 import * as gfx from 'gophergfx'
+import { Quaternion, Vector3 } from 'gophergfx';
 import { EarthquakeMarker } from './EarthquakeMarker';
 import { EarthquakeRecord } from './EarthquakeRecord';
 
@@ -14,6 +15,12 @@ export class Earth extends gfx.Transform3
 
     public globeMode: boolean;
 
+    public elapsed_time: number;
+
+    public paused: boolean;
+
+    public axis: Quaternion;
+
     constructor()
     {
         // Call the superclass constructor
@@ -22,6 +29,12 @@ export class Earth extends gfx.Transform3
         this.earthMesh = new gfx.MorphMesh();
 
         this.globeMode = false;
+
+        this.elapsed_time = 0;
+
+        this.paused = false;
+
+        this.axis = new Quaternion(0, 0.25, -0.25, 1);
     }
 
     public createMesh() : void
@@ -45,37 +58,33 @@ export class Earth extends gfx.Transform3
         // so they don't need to be member variables.
         const mapVertices: gfx.Vector3[] = [];
         const mapNormals: gfx.Vector3[] = [];
-
+        const indices: number[] = [];
+        const texCoords: number[] = [];
         // Part 1: Creating the Flat Map Mesh
         // As a demo, we'll add an rectangle with two triangles.
         // First, we define four vertices at each corner of the earth
         // in latitude and longitude and convert to the coordinates
         // used for the flat map.
-        mapVertices.push(this.convertLatLongToPlane(-90, -180));
-        mapVertices.push(this.convertLatLongToPlane(-90, 180));
-        mapVertices.push(this.convertLatLongToPlane(90, 180));
-        mapVertices.push(this.convertLatLongToPlane(90, -180));
-
-        // The flat map normals are always directly outward towards the camera
-        mapNormals.push(gfx.Vector3.BACK);
-        mapNormals.push(gfx.Vector3.BACK);
-        mapNormals.push(gfx.Vector3.BACK);
-        mapNormals.push(gfx.Vector3.BACK);
-
-        // Define indices into the array for the two triangles
-        const indices: number[] = [];
-        indices.push(0, 1, 2);
-        indices.push(0, 2, 3);
-
-        // Part 2: Texturing the Mesh
-        // Again, you should replace the example code below
-        // with texture coordinates for the earth mesh.
-        const texCoords: number[] = [];
-        texCoords.push(0, 0);
-        texCoords.push(0, 0);
-        texCoords.push(0, 0);
-        texCoords.push(0, 0);
-
+        const vertexRes = meshResolution + 1
+        const xoffset = 360 / meshResolution;
+        const yoffset = 180 / meshResolution;
+        for (let i = 0; i < vertexRes; i++) {
+            for (let j = 0; j < vertexRes; j++) {
+                mapVertices.push(this.convertLatLongToPlane(-90 + yoffset * i, -180 + xoffset * j)); 
+                // The flat map normals are always directly outward towards the camera   
+                mapNormals.push(gfx.Vector3.BACK);
+                // Part 2: Texturing the Mesh
+                texCoords.push((j / meshResolution), 1 - (i / meshResolution));
+                // Define indices into the array for the two triangles
+                if (i < meshResolution && j < meshResolution) {
+                    //console.log(i + " " + j);
+                    for (let k = 0; k < 2; k++) {
+                        if (k==0) indices.push((i+1) * vertexRes + j, i * vertexRes + j, i * vertexRes + (j+1));
+                        else indices.push(i * vertexRes + (j+1), (i+1) * vertexRes + (j+1), (i+1) * vertexRes + j);
+                    }
+                }
+            }
+        }
         // Set all the earth mesh data
         this.earthMesh.setVertices(mapVertices, true);
         this.earthMesh.setNormals(mapNormals, true);
@@ -87,7 +96,19 @@ export class Earth extends gfx.Transform3
         // You should compute a new set of vertices and normals
         // for the globe. You will need to also add code in
         // the convertLatLongToSphere() method below.
-
+        const globeVertices: gfx.Vector3[] = [];
+        const globeNormals: gfx.Vector3[] = [];
+        for (let i = 0; i < vertexRes; i++) {
+            for (let j = 0; j < vertexRes; j++) {
+                const vec = this.convertLatLongToSphere(-90 + yoffset * i, -180 + xoffset * j);
+                globeVertices.push(vec); 
+                const vecdir = vec.clone();
+                vecdir.normalize();
+                globeNormals.push(vecdir);
+            }
+        }
+        this.earthMesh.setMorphTargetVertices(globeVertices);
+        this.earthMesh.setMorphTargetNormals(globeNormals);
         // Add the mesh to this group
         this.add(this.earthMesh);
     }
@@ -99,6 +120,25 @@ export class Earth extends gfx.Transform3
         // the user selects flat map or globe mode in the GUI.
         // You should use this boolean to control the morphing
         // of the earth mesh, as described in the readme.
+        if (this.globeMode){
+            if (this.earthMesh.morphAlpha <= 0) this.elapsed_time = 0;
+            if (this.earthMesh.morphAlpha < 1) {
+                this.elapsed_time += deltaTime;
+                this.earthMesh.morphAlpha = gfx.MathUtils.lerp(0, 1, this.elapsed_time);
+                const newRotVec = gfx.Quaternion.slerp(Quaternion.IDENTITY, this.axis, this.elapsed_time);
+                this.earthMesh.rotation = newRotVec;
+            }
+            else this.earthMesh.rotateY(deltaTime / 4);
+        }
+        else {
+            if (this.earthMesh.morphAlpha >= 1) this.elapsed_time = 0;
+            if (this.earthMesh.morphAlpha > 0) {
+                this.elapsed_time += deltaTime;
+                this.earthMesh.morphAlpha = 1 - gfx.MathUtils.lerp(0, 1, this.elapsed_time);
+                const newRotVec = gfx.Quaternion.slerp(this.earthMesh.rotation, Quaternion.IDENTITY, this.elapsed_time);
+                this.earthMesh.rotation = newRotVec;
+            }
+        }
     }
 
     public createEarthquake(record: EarthquakeRecord)
@@ -110,21 +150,27 @@ export class Earth extends gfx.Transform3
         // Currently, the earthquake is just placed randomly
         // on the plane. You will need to update this code to
         // correctly calculate both the map and globe positions.
-        const mapPosition = new gfx.Vector3(Math.random()*6-3, Math.random()*4-2, 0);
-        const globePosition = new gfx.Vector3(Math.random()*6-3, Math.random()*4-2, 0);
+        const mapPosition = this.convertLatLongToPlane(record.latitude, record.longitude);
+        const globePosition = this.convertLatLongToSphere(record.latitude, record.longitude);
 
         const earthquake = new EarthquakeMarker(mapPosition, globePosition, record, duration);
 
         // Global adjustment to reduce the size. You should probably
         // update this be a more meaningful representation..
-        earthquake.scale.set(0.5, 0.5, 0.5);
+        earthquake.scale = gfx.Vector3.lerp(new Vector3(0.05, 0.05, 0.05), new Vector3(1, 1, 1), earthquake.magnitude);
+        earthquake.baseScale = earthquake.scale;
+        earthquake.material.setColor(gfx.Color.lerp(gfx.Color.YELLOW, gfx.Color.RED, earthquake.magnitude));
+        earthquake.latitude = record.latitude;
+        earthquake.longitude = record.longitude;
 
         // Uncomment this line of code to active the earthquake markers
-        //this.add(earthquake);
+        this.add(earthquake);
     }
 
-    public animateEarthquakes(currentTime : number)
+    public animateEarthquakes(currentTime : number, deltatime : number)
     {
+        const rotQ = new Quaternion(0, 0.25, -0.25, 1);
+        rotQ.normalize();
         // This code removes earthquake markers after their life has expired
         this.children.forEach((quake: gfx.Transform3) => {
             if(quake instanceof EarthquakeMarker)
@@ -142,7 +188,25 @@ export class Earth extends gfx.Transform3
                     // Part 6: Morphing the Earthquake Positions
                     // If you have correctly computed the flat map and globe positions
                     // for each earthquake marker in part 5, then you can simply lerp
-                    // between them using the same alpha as the earth mesh.
+                    // between them using the same alpha as the earth mesh
+                    if (this.globeMode) {
+                        if (this.earthMesh.morphAlpha < 1) quake.position = gfx.Vector3.lerp(quake.mapPosition, quake.globePosition, this.earthMesh.morphAlpha);
+                        else {
+                            const rad = Math.PI / 180;
+                            const rate = deltatime * 16;
+                            quake.longitude += rate;
+                            if (quake.longitude > 180) quake.longitude -= 2 * 180; 
+                            const x = Math.cos(quake.latitude * rad) * Math.sin(quake.longitude * rad);
+                            const y = Math.sin(quake.latitude * rad);
+                            const z = Math.cos(quake.latitude * rad) * Math.cos(quake.longitude * rad); 
+                            quake.position = new Vector3(x, y, z);
+                            quake.position.rotate(rotQ);
+                        }
+                    }
+                    else {
+                        if (this.earthMesh.morphAlpha > 0) quake.position = gfx.Vector3.lerp(quake.globePosition, quake.mapPosition, 1 - this.earthMesh.morphAlpha);
+                    }
+                    quake.scale = gfx.Vector3.lerp(quake.baseScale, gfx.Vector3.ZERO, playbackLife);
                 }
             }
         });
@@ -162,12 +226,21 @@ export class Earth extends gfx.Transform3
         // Part 3: Creating the Globe Mesh
         // Add code here to correctly compute the 3D sphere position
         // based on latitude and longitude.
-        return new gfx.Vector3();
+        const rad = Math.PI / 180;
+        const x = Math.cos(latitude * rad) * Math.sin(longitude * rad);
+        const y = Math.sin(latitude * rad);
+        const z = Math.cos(latitude * rad) * Math.cos(longitude * rad); 
+        return new gfx.Vector3(x, y, z);
     }
 
     // This function toggles the wireframe debug mode on and off
     public toggleDebugMode(debugMode : boolean)
     {
         this.earthMesh.material.wireframe = debugMode;
+    }
+
+    public togglePause(pauseState : boolean) 
+    {
+        this.paused = pauseState;
     }
 }

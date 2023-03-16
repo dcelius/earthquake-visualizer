@@ -11,11 +11,14 @@ export class EarthquakeMarker extends gfx.MeshInstance
 {
     private static baseMesh: gfx.Mesh;
 
+    public baseScale : gfx.Vector3;
     public startTime : number;
     public duration : number;
     public magnitude : number;
     public mapPosition : gfx.Vector3;
     public globePosition : gfx.Vector3;
+    public latitude : number;
+    public longitude : number;
 
     constructor(mapPosition: gfx.Vector3, globePosition: gfx.Vector3, record: EarthquakeRecord, duration: number)
     {
@@ -35,6 +38,9 @@ export class EarthquakeMarker extends gfx.MeshInstance
         this.duration = duration;
         this.mapPosition = mapPosition;
         this.globePosition = globePosition;
+        this.baseScale = gfx.Vector3.ZERO;
+        this.latitude = 0;
+        this.longitude = 0;
 
         // Set the position to the plane by default
         this.position.copy(this.mapPosition);
