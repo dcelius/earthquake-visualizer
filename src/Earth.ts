@@ -200,6 +200,7 @@ export class Earth extends gfx.Transform3
                     // If you have correctly computed the flat map and globe positions
                     // for each earthquake marker in part 5, then you can simply lerp
                     // between them using the same alpha as the earth mesh
+                    
                     if (this.globeMode) {
                         if (this.earthMesh.morphAlpha < 1) 
                         {
